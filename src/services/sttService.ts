@@ -1,10 +1,15 @@
 /**
- * Speech-to-Text
- * Utilise l'enregistrement audio via expo-av + envoi au proxy.
- * Le proxy forwarde vers l'API STT configurée côté serveur.
- * Aucune clé API nécessaire côté client.
+ * Speech-to-Text via le proxy Deepgram
+ * Envoie l'audio enregistré au proxy, qui le forwarde à Deepgram.
+ * Aucune clé API nécessaire côté utilisateur.
+ * Deepgram gère la diarization automatique (locuteur A/B).
  */
 import { PROXY_URL } from '../constants/config';
+
+interface STTResult {
+  text: string | null;
+  speakers: number;
+}
 
 type STTCallback = (text: string) => void;
 
@@ -17,8 +22,9 @@ class STTService {
 
   /**
    * Transcrit un fichier audio via le proxy
+   * Retourne le texte transcrit et le nombre de locuteurs détectés
    */
-  async transcribe(audioUri: string): Promise<string | null> {
+  async transcribe(audioUri: string): Promise<STTResult> {
     try {
       const formData = new FormData();
       formData.append('file', {
@@ -29,31 +35,35 @@ class STTService {
 
       const response = await fetch(`${PROXY_URL}/stt`, {
         method: 'POST',
-        headers: {
-          // Pas d'Authorization — le proxy gère la clé
-        },
         body: formData,
       });
 
       if (!response.ok) {
-        console.warn('STT proxy error, fallback silencieux');
-        return null;
+        console.warn('STT proxy error');
+        return { text: null, speakers: 0 };
       }
 
       const data = await response.json();
-      return data.text || null;
+
+      if (data.text) {
+        this.onResult?.(data.text);
+      }
+
+      return {
+        text: data.text || null,
+        speakers: data.speakers || 0,
+      };
     } catch (error) {
-      console.warn('STT error (hors-ligne?):', error);
-      return null;
+      console.warn('STT error:', error);
+      return { text: null, speakers: 0 };
     }
   }
 
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await fetch(`${PROXY_URL}/health`, {
-        method: 'GET',
-      });
-      return response.ok;
+      const response = await fetch(`${PROXY_URL}/health`);
+      const data = await response.json();
+      return data.stt === true;
     } catch {
       return false;
     }
