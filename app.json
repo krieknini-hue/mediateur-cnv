@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "krieknini",
     "name": "Médiateur CNV",
     "slug": "mediateur-cnv",
     "version": "1.0.0",
