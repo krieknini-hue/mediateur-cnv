@@ -1,13 +1,18 @@
 {
   "expo": {
-    "name": "mediateur-cnv",
+    "name": "Médiateur CNV",
     "slug": "mediateur-cnv",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "description": "Coach personnel en Communication Non Violente — écoute, reformule et guide vos conversations en temps réel",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Cette app utilise le microphone pour écouter et analyser votre conversation en temps réel.",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +21,23 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Cette app utilise le microphone pour écouter et analyser votre conversation."
+        }
+      ]
+    ]
   }
 }
