@@ -14,6 +14,7 @@ export default function App() {
     lastIntervention,
     isIntervening,
     isOnline,
+    escalationLevel,
     startSession,
     stopSession,
     pauseSession,
@@ -60,6 +61,7 @@ export default function App() {
       sessionDuration={sessionDuration}
       transcript={transcript}
       currentIntervention={lastIntervention}
+      escalationLevel={escalationLevel}
       isIntervening={isIntervening}
       isOnline={isOnline}
       onStop={handleStop}

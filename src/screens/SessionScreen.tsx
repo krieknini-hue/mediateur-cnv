@@ -18,6 +18,7 @@ interface SessionScreenProps {
   currentIntervention: string | null;
   isIntervening: boolean;
   isOnline: boolean;
+  escalationLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   onStop: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -32,6 +33,7 @@ export default function SessionScreen({
   currentIntervention,
   isIntervening,
   isOnline,
+  escalationLevel,
   onStop,
   onPause,
   onResume,
@@ -88,6 +90,21 @@ export default function SessionScreen({
 
   const statusConfig = getStatusConfig();
 
+  const getEscalationConfig = () => {
+    switch (escalationLevel) {
+      case 'LOW':
+        return { label: 'Calme', color: Colors.success };
+      case 'MEDIUM':
+        return { label: 'Attention', color: Colors.warning };
+      case 'HIGH':
+        return { label: '⚠️ Tension', color: Colors.danger };
+      default:
+        return null;
+    }
+  };
+
+  const escalationConfig = getEscalationConfig();
+
   const quickCommands = [
     { label: 'Reformule', action: 'reformulate', icon: '🔄' },
     { label: 'Résumé', action: 'synthesize', icon: '📋' },
@@ -107,6 +124,14 @@ export default function SessionScreen({
         <Animated.View
           style={[styles.statusDot, { backgroundColor: statusConfig.color, opacity: pulseAnim }]}
         />
+        {escalationConfig && (
+          <View style={[styles.escalationBadge, { backgroundColor: escalationConfig.color + '20' }]}>
+            <View style={[styles.escalationDot, { backgroundColor: escalationConfig.color }]} />
+            <Text style={[styles.escalationText, { color: escalationConfig.color }]}>
+              {escalationConfig.label}
+            </Text>
+          </View>
+        )}
         <Text style={styles.statusLabel}>{statusConfig.label}</Text>
         <View style={styles.headerRight}>
           {!isOnline && (
@@ -241,6 +266,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textSecondary,
     fontVariant: ['tabular-nums'],
+  },
+  escalationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 12,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.full,
+    marginRight: 8,
+  },
+  escalationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  escalationText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   interventionBubble: {
     backgroundColor: Colors.primaryLight + '20',

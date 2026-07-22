@@ -1,59 +1,54 @@
-import { LLM_CONFIG, PROXY_URL } from '../constants/config';
+import { LLM_CONFIG } from '../constants/config';
+import type { LLMOutput } from '../types';
 
-interface LLMResponse {
+interface LLMResult {
   intervention: string | null;
   type: string;
   shouldIntervene: boolean;
+  escalationLevel: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  needsA: string | null;
+  needsB: string | null;
 }
 
 class LLMService {
   private conversationHistory: { role: string; content: string }[] = [];
-  private systemPrompt: string;
 
-  constructor() {
-    this.systemPrompt = LLM_CONFIG.systemPrompt;
-  }
-
-  private getApiUrl(): string {
-    return LLM_CONFIG.proxyUrl;
+  clearHistory() {
+    this.conversationHistory = [];
   }
 
   /**
-   * Analyse le transcript via le proxy (pas de clé API côté client)
+   * Analyse le transcript via le proxy DeepSeek
    */
-  async analyze(
-    transcript: string,
-    command?: string,
-  ): Promise<LLMResponse> {
-    // Construire le message
+  async analyze(transcript: string, command?: string): Promise<LLMResult> {
+    // Construire le message selon le format attendu par le prompt
     let prompt = transcript;
 
     if (command) {
       const commands: Record<string, string> = {
-        reformulate: 'Propose une reformulation CNV de cet échange.',
-        synthesize: 'Fais une synthèse de ce qui a été dit jusqu\'à présent.',
-        needs: 'Analyse les besoins sous-jacents exprimés dans cet échange.',
-        step_check: 'Fais un point d\'étape sur la conversation.',
-        rewind: 'Résume le dernier point important.',
+        reformulate: 'REFORMULE',
+        synthesize: 'RÉSUMÉ',
+        needs: 'BESOINS',
+        step_check: "POINT D'ÉTAPE",
+        rewind: 'RÉSUMÉ',
       };
-      prompt = `${commands[command] || ''}\n\nTranscription:\n${transcript}`;
+      prompt = `${commands[command] || ''}\n\n${transcript}`;
     }
 
+    // Format attendu par le prompt : [Locuteur A/B] : "texte"
+    const formattedInput = `[Locuteur A] : "${prompt}"`;
+
     const messages = [
-      { role: 'system', content: this.systemPrompt },
-      ...this.conversationHistory.slice(-6),
-      { role: 'user', content: prompt },
+      { role: 'system', content: LLM_CONFIG.systemPrompt },
+      ...this.conversationHistory.slice(-4),
+      { role: 'user', content: formattedInput },
     ];
 
     try {
-      const response = await fetch(this.getApiUrl(), {
+      const response = await fetch(LLM_CONFIG.proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages,
-          max_tokens: 400,
-          temperature: 0.7,
-        }),
+        body: JSON.stringify({ messages, max_tokens: 300, temperature: 0.7 }),
       });
 
       if (!response.ok) {
@@ -64,65 +59,87 @@ class LLMService {
       const content = data.choices?.[0]?.message?.content;
 
       if (!content) {
-        return { intervention: null, type: 'silent', shouldIntervene: false };
+        return emptyResult();
       }
 
       // Ajouter à l'historique
       this.conversationHistory.push(
-        { role: 'user', content: prompt },
+        { role: 'user', content: formattedInput },
         { role: 'assistant', content },
       );
 
-      // Analyser le contenu de la réponse
-      return this.parseResponse(content);
+      // Parser la réponse JSON du LLM
+      return this.parseLLMOutput(content);
     } catch (error) {
       console.error('LLM error:', error);
-      return { intervention: null, type: 'silent', shouldIntervene: false };
+      return emptyResult();
     }
   }
 
-  private parseResponse(content: string): LLMResponse {
-    // Détecter les mots-clés d'intervention
-    const lower = content.toLowerCase();
+  private parseLLMOutput(content: string): LLMResult {
+    try {
+      // Extraire le JSON de la réponse (le LLM peut ajouter du texte avant/après)
+      const jsonMatch = content.match(/\{[\s\S]*"spoken_response"[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : content;
+      const parsed: LLMOutput = JSON.parse(jsonStr);
 
-    // Vérifier si c'est une intervention significative
-    if (content.length < 20) {
-      return { intervention: null, type: 'silent', shouldIntervene: false };
+      if (parsed.should_speak && parsed.spoken_response) {
+        let type = 'reformulation';
+
+        if (parsed.escalation_level === 'HIGH') type = 'warning';
+        else if (parsed.escalation_level === 'MEDIUM') type = 'reformulation';
+        else type = 'silent';
+
+        // Si commande explicite, forcer le type
+        const isCommand = content.includes('REFORMULE') || content.includes('RÉSUMÉ') || content.includes('BESOINS');
+        if (isCommand && parsed.should_speak) {
+          if (content.includes('RÉSUMÉ')) type = 'synthesis';
+          else if (content.includes('BESOINS')) type = 'needs_analysis';
+          else type = 'reformulation';
+        }
+
+        return {
+          intervention: parsed.spoken_response,
+          type,
+          shouldIntervene: true,
+          escalationLevel: parsed.escalation_level,
+          needsA: parsed.detected_needs?.speaker_A || null,
+          needsB: parsed.detected_needs?.speaker_B || null,
+        };
+      }
+
+      return {
+        ...emptyResult(),
+        escalationLevel: parsed.escalation_level || null,
+        needsA: parsed.detected_needs?.speaker_A || null,
+        needsB: parsed.detected_needs?.speaker_B || null,
+      };
+    } catch {
+      // Fallback: si le JSON est invalide, on traite comme du texte
+      if (content.length > 20) {
+        return {
+          intervention: content,
+          type: 'reformulation',
+          shouldIntervene: true,
+          escalationLevel: null,
+          needsA: null,
+          needsB: null,
+        };
+      }
+      return emptyResult();
     }
-
-    let type = 'silent';
-    let shouldIntervene = false;
-
-    const hasWarning = lower.includes('attention') || lower.includes('alerte') || lower.includes('tension');
-    const hasReformulation = lower.includes('reformul') || lower.includes('pourrais-tu') || lower.includes('peut-être');
-    const hasSynthesis = lower.includes('synthèse') || lower.includes('résumé') || lower.includes('en résumé');
-    const hasStepCheck = lower.includes('point') || lower.includes('récap');
-    const hasNeeds = lower.includes('besoin') || lower.includes('sentiment');
-
-    if (hasWarning) {
-      type = 'warning';
-      shouldIntervene = true;
-    } else if (hasReformulation) {
-      type = 'reformulation';
-      shouldIntervene = true;
-    } else if (hasSynthesis) {
-      type = 'synthesis';
-      shouldIntervene = true;
-    } else if (hasStepCheck && hasNeeds) {
-      type = 'needs_analysis';
-      shouldIntervene = true;
-    }
-
-    return {
-      intervention: shouldIntervene ? content : null,
-      type,
-      shouldIntervene,
-    };
   }
+}
 
-  clearHistory() {
-    this.conversationHistory = [];
-  }
+function emptyResult(): LLMResult {
+  return {
+    intervention: null,
+    type: 'silent',
+    shouldIntervene: false,
+    escalationLevel: null,
+    needsA: null,
+    needsB: null,
+  };
 }
 
 export const llmService = new LLMService();

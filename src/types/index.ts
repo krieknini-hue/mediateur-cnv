@@ -54,3 +54,19 @@ export type VoiceCommandAction =
   | 'status'
   | 'needs'
   | 'step_check';
+
+// === Nouveau format de sortie LLM ===
+
+export type EscalationLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface DetectedNeeds {
+  speaker_A: string | null;
+  speaker_B: string | null;
+}
+
+export interface LLMOutput {
+  should_speak: boolean;
+  escalation_level: EscalationLevel;
+  detected_needs: DetectedNeeds;
+  spoken_response: string; // Texte court max 35 mots
+}
