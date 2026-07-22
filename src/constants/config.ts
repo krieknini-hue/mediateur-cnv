@@ -1,7 +1,7 @@
 // Fichier de configuration
 // Le proxy hébergé sur le VPS gère les appels API — aucun token requis côté utilisateur
 
-export const PROXY_URL = 'http://76.13.62.236:19920';
+export const PROXY_URL = 'https://mediateur.srv1722811.hstgr.cloud';
 
 // LLM (Analyse CNV) — via le proxy
 export const LLM_CONFIG = {
