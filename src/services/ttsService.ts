@@ -1,68 +1,64 @@
-import { TTS_CONFIG } from '../constants/config';
+/**
+ * Text-to-Speech
+ * Utilise le synthétiseur vocal natif d'Android/iOS via expo-speech.
+ * Fonctionne hors-ligne, aucune clé API nécessaire.
+ */
+import * as Speech from 'expo-speech';
 
 class TTSService {
-  private apiKey: string = '';
+  private isSpeaking = false;
 
-  setApiKey(key: string) {
-    this.apiKey = key;
-  }
-
-  hasApiKey(): boolean {
-    return this.apiKey.length > 0;
-  }
-
-  async speak(text: string): Promise<string | null> {
-    if (!this.apiKey) {
-      console.warn('TTS API key not configured');
-      return null;
+  /**
+   * Prononce un texte à voix haute
+   */
+  async speak(text: string): Promise<void> {
+    if (this.isSpeaking) {
+      await Speech.stop();
     }
 
-    try {
-      const config = TTS_CONFIG.elevenlabs;
+    this.isSpeaking = true;
 
-      const response = await fetch(
-        `${config.baseUrl}/${config.voiceId}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'xi-api-key': this.apiKey,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: config.model,
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.7,
-              style: 0.2,
-            },
-          }),
+    return new Promise((resolve) => {
+      Speech.speak(text, {
+        language: 'fr-FR',
+        pitch: 1.0,
+        rate: 0.85, // Plus lent = plus apaisant
+        onDone: () => {
+          this.isSpeaking = false;
+          resolve();
         },
-      );
-
-      if (!response.ok) {
-        throw new Error(`TTS API error: ${response.status}`);
-      }
-
-      // Convertir la réponse en blob puis en URI locale
-      const blob = await response.blob();
-      const reader = new FileReader();
-
-      return new Promise<string | null>((resolve, reject) => {
-        reader.onloadend = () => {
-          if (reader.result && typeof reader.result === 'string') {
-            resolve(reader.result); // data URI
-          } else {
-            resolve(null);
-          }
-        };
-        reader.onerror = () => reject(null);
-        reader.readAsDataURL(blob);
+        onStopped: () => {
+          this.isSpeaking = false;
+          resolve();
+        },
+        onError: () => {
+          this.isSpeaking = false;
+          resolve();
+        },
       });
-    } catch (error) {
-      console.error('TTS synthesis error:', error);
-      return null;
+    });
+  }
+
+  /**
+   * Prédit un son d'alerte doux (notification simple)
+   */
+  async playChime(): Promise<void> {
+    // On murmure un petit son
+    await this.speak('...');
+  }
+
+  /**
+   * Arrête la synthèse vocale en cours
+   */
+  async stop(): Promise<void> {
+    if (this.isSpeaking) {
+      await Speech.stop();
+      this.isSpeaking = false;
     }
+  }
+
+  get isCurrentlySpeaking(): boolean {
+    return this.isSpeaking;
   }
 }
 

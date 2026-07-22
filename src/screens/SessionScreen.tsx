@@ -17,10 +17,12 @@ interface SessionScreenProps {
   transcript: TranscriptSegment[];
   currentIntervention: string | null;
   isIntervening: boolean;
+  isOnline: boolean;
   onStop: () => void;
   onPause: () => void;
   onResume: () => void;
   onCommand: (cmd: string) => void;
+  onAnalyze: () => void;
 }
 
 export default function SessionScreen({
@@ -29,14 +31,15 @@ export default function SessionScreen({
   transcript,
   currentIntervention,
   isIntervening,
+  isOnline,
   onStop,
   onPause,
   onResume,
   onCommand,
+  onAnalyze,
 }: SessionScreenProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Animation de pulsation selon l'état
   useEffect(() => {
     const animate = () => {
       Animated.loop(
@@ -92,21 +95,28 @@ export default function SessionScreen({
     { label: 'Point', action: 'step_check', icon: '📍' },
   ];
 
+  // Alterner les labels de locuteurs
+  const getSpeakerLabel = (index: number) => {
+    return index % 2 === 0 ? '👤 Locuteur A' : '👤 Locuteur B';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header - statut animé */}
+      {/* Header */}
       <View style={styles.header}>
         <Animated.View
-          style={[
-            styles.statusDot,
-            { backgroundColor: statusConfig.color, opacity: pulseAnim },
-          ]}
+          style={[styles.statusDot, { backgroundColor: statusConfig.color, opacity: pulseAnim }]}
         />
         <Text style={styles.statusLabel}>{statusConfig.label}</Text>
-        <Text style={styles.duration}>{formatTime(sessionDuration)}</Text>
+        <View style={styles.headerRight}>
+          {!isOnline && (
+            <Text style={styles.offlineBadge}>📡 Hors-ligne</Text>
+          )}
+          <Text style={styles.duration}>{formatTime(sessionDuration)}</Text>
+        </View>
       </View>
 
-      {/* Zone d'intervention */}
+      {/* Zone d'intervention du coach */}
       {currentIntervention && (
         <View style={styles.interventionBubble}>
           <Text style={styles.interventionCoach}>🌸 Coach CNV</Text>
@@ -117,15 +127,12 @@ export default function SessionScreen({
         </View>
       )}
 
-      {/* Quick commands */}
+      {/* Barre de commandes rapides + bouton Analyser */}
       <View style={styles.commandsRow}>
         {quickCommands.map((cmd) => (
           <TouchableOpacity
             key={cmd.action}
-            style={[
-              styles.commandButton,
-              status !== 'listening' && styles.commandButtonDisabled,
-            ]}
+            style={[styles.commandButton, status !== 'listening' && styles.commandButtonDisabled]}
             onPress={() => onCommand(cmd.action)}
             disabled={status !== 'listening'}
           >
@@ -133,28 +140,37 @@ export default function SessionScreen({
             <Text style={styles.commandLabel}>{cmd.label}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[styles.analyzeButton, transcript.length === 0 && styles.commandButtonDisabled]}
+          onPress={onAnalyze}
+          disabled={transcript.length === 0}
+        >
+          <Text style={styles.commandIcon}>🔍</Text>
+          <Text style={styles.commandLabel}>Analyser</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Transcript en temps réel */}
+      {/* Transcript */}
       <View style={styles.transcriptContainer}>
-        <Text style={styles.transcriptTitle}>Transcript</Text>
+        <Text style={styles.transcriptTitle}>Transcript de la session</Text>
         {transcript.length === 0 ? (
           <View style={styles.emptyTranscript}>
-            <Text style={styles.emptyText}>La conversation apparaîtra ici</Text>
-            <Text style={styles.emptySub}>
-            Posez votre téléphone et parlez naturellement
-            </Text>
+            <Text style={styles.emptyText}>Posez votre téléphone et parlez</Text>
+            <Text style={styles.emptySub}>Les échanges apparaîtront ici avec leurs locuteurs</Text>
           </View>
         ) : (
           <FlatList
-            data={transcript.slice(-20)}
+            data={transcript.slice(-30)}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <View style={styles.transcriptItem}>
+                <Text style={styles.speakerLabel}>
+                  {getSpeakerLabel(index)}
+                </Text>
+                <Text style={styles.transcriptText}>{item.text}</Text>
                 <Text style={styles.transcriptTime}>
                   {new Date(item.timestamp).toLocaleTimeString()}
                 </Text>
-                <Text style={styles.transcriptText}>{item.text}</Text>
               </View>
             )}
           />
@@ -175,10 +191,7 @@ export default function SessionScreen({
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.stopButton, !currentIntervention && styles.stopButtonMargin]}
-          onPress={onStop}
-        >
+        <TouchableOpacity style={styles.stopButton} onPress={onStop}>
           <Text style={styles.stopIcon}>⏹</Text>
           <Text style={styles.stopText}>Arrêter</Text>
         </TouchableOpacity>
@@ -212,6 +225,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  offlineBadge: {
+    fontSize: FontSize.caption,
+    color: Colors.warning,
+    fontWeight: '500',
   },
   duration: {
     fontSize: FontSize.bodyLarge,
@@ -249,28 +272,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
   },
   commandButton: {
-    flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
+    minWidth: 60,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   commandButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   commandIcon: {
-    fontSize: 20,
+    fontSize: 18,
     marginBottom: 2,
   },
   commandLabel: {
-    fontSize: FontSize.caption,
+    fontSize: 10,
     color: Colors.text,
     fontWeight: '500',
+  },
+  analyzeButton: {
+    backgroundColor: Colors.success + '15',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    alignItems: 'center',
+    minWidth: 60,
+    borderWidth: 1,
+    borderColor: Colors.success + '40',
   },
   transcriptContainer: {
     flex: 1,
@@ -308,17 +343,26 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   transcriptItem: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingLeft: Spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.primaryLight,
   },
-  transcriptTime: {
-    fontSize: 10,
-    color: Colors.textLight,
+  speakerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
     marginBottom: 2,
   },
   transcriptText: {
     fontSize: FontSize.body,
     color: Colors.text,
     lineHeight: 22,
+  },
+  transcriptTime: {
+    fontSize: 10,
+    color: Colors.textLight,
+    marginTop: 2,
   },
   controls: {
     flexDirection: 'row',
@@ -350,7 +394,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
   },
-  stopButtonMargin: {},
   stopIcon: {
     fontSize: 24,
   },

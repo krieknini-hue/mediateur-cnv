@@ -11,13 +11,15 @@ export default function App() {
     status,
     sessionDuration,
     transcript,
-    currentIntervention,
+    lastIntervention,
     isIntervening,
+    isOnline,
     startSession,
     stopSession,
     pauseSession,
     resumeSession,
     sendCommand,
+    analyzeLastExchange,
   } = useSession();
 
   const handleStart = useCallback(async () => {
@@ -44,9 +46,7 @@ export default function App() {
   }, [stopSession]);
 
   const handleCommand = useCallback(
-    (action: string) => {
-      sendCommand(action as VoiceCommandAction);
-    },
+    (action: string) => sendCommand(action as VoiceCommandAction),
     [sendCommand],
   );
 
@@ -59,12 +59,14 @@ export default function App() {
       status={status}
       sessionDuration={sessionDuration}
       transcript={transcript}
-      currentIntervention={currentIntervention}
+      currentIntervention={lastIntervention}
       isIntervening={isIntervening}
+      isOnline={isOnline}
       onStop={handleStop}
       onPause={pauseSession}
       onResume={resumeSession}
       onCommand={handleCommand}
+      onAnalyze={analyzeLastExchange}
     />
   );
 }
