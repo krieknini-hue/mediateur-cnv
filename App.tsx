@@ -3,9 +3,10 @@ import { Alert } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import SessionScreen from './src/screens/SessionScreen';
 import { useSession } from './src/hooks/useSession';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import type { VoiceCommandAction } from './src/types';
 
-export default function App() {
+function AppContent() {
   const [sessionActive, setSessionActive] = useState(false);
   const {
     status,
@@ -70,5 +71,13 @@ export default function App() {
       onCommand={handleCommand}
       onAnalyze={analyzeLastExchange}
     />
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 }
